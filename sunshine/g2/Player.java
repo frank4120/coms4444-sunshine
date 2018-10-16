@@ -93,6 +93,29 @@ public class Player implements sunshine.sim.Player {
         Collections.sort(sortedClusters);
     }
 
+    public Cluster computeCentroid(Cluster cluster) {
+        Point anchor = cluster.getAnchor();
+        Point anchor2 = new Point(anchor.x, anchor.y);
+        
+        List<Point> bales = cluster.getOthers();
+        
+        bales.add(anchor2);
+        
+        double xSum = 0, ySum = 0;
+        
+        for (int i=0; i < bales.size(); i++) {
+            Point bale = bales.get(i);
+            xSum += bale.x;
+            ySum += bale.y;
+        }
+        
+        Point centroid = new Point(xSum/bales.size(), ySum/bales.size());
+        
+        cluster.setAnchor(centroid);
+        
+        return cluster;
+    }
+
     // when the tractor is back to the original
     public Point lazyMove(Point current, Point dest) 
     {
@@ -358,6 +381,10 @@ public class Player implements sunshine.sim.Player {
         public Cluster (Point a, List<Point> o) {
             anchor = new Point(a.x, a.y);
             others = new ArrayList<Point>(o);
+        }
+
+        public void setAnchor(Point anchor) {
+            anchor = new Point(anchor.x, anchor.y);
         }
 
         public Point getAnchor() {
