@@ -437,6 +437,13 @@ public class Player implements sunshine.sim.Player {
         return maxIndex;
     }
 
+    private void unstack(Tractor tractor) {
+        int tractorID = tractor.getId();
+        List<Command> commands = commandCenter.get(tractorID);	
+        commands.add(new Command(CommandType.UNSTACK));
+        commands.add(new Command(CommandType.UNLOAD));
+    }
+
     public Command getCommand(Tractor tractor)
     {   
         int tractorID = tractor.getId();
@@ -447,11 +454,11 @@ public class Player implements sunshine.sim.Player {
         }
 
         if (commands.size() == 0) {
-            return new Command(CommandType.UNLOAD);
+            //return new Command(CommandType.UNLOAD);
+            unstack(tractor);
         }
-        else {
-            return commands.remove(0);
-        }
+        return commands.remove(0);
+        
     }
     private void buildList() {
         for (int i = 0; i < 11; i++) {
