@@ -191,7 +191,7 @@ public class Player implements sunshine.sim.Player {
         return cluster;
     }
     // when the tractor is back to the original
-    public Point lazyMove(Point current, Point dest) 
+    public Point lazyMove(Point current, Point dest, double diff) 
     {
         double distance = calcEucDistance(current, dest);
         if (distance < 1) {
@@ -201,8 +201,8 @@ public class Player implements sunshine.sim.Player {
         double xDif = dest.x - current.x;
         double yDif = dest.y - current.y;
 
-        double newX = dest.x + (xDif * 0.99) / distance;
-        double newY = dest.y + (yDif * 0.99) / distance;
+        double newX = dest.x + (xDif * diff) / distance;
+        double newY = dest.y + (yDif * diff) / distance;
         Point lazyPoint = new Point(newX, newY);
         return lazyPoint;
     }
@@ -245,14 +245,17 @@ public class Player implements sunshine.sim.Player {
         if (tractor.getAttachedTrailer() != null) {
             commands.add(new Command(CommandType.DETATCH));
         }
-        
-        commands.add(Command.createMoveCommand(p));
+
+        Point tractorPos = tractor.getLocation();
+        Point newP = lazyMove(tractorPos, p, -0.20); // ********************************* Lazy Move ***************
+
+        commands.add(Command.createMoveCommand(newP));
         commands.add(new Command(CommandType.LOAD));
 
 
         Point home = new Point(0.0, 0.0);
-        Point tractorPos = tractor.getLocation();
-        Point newP = lazyMove(tractorPos, home);
+        tractorPos = tractor.getLocation();
+        newP = lazyMove(newP, home, -0.99); // ********************************* Lazy Move ***************
 
         commands.add(Command.createMoveCommand(newP));
         commands.add(new Command(CommandType.UNLOAD));
@@ -268,7 +271,7 @@ public class Player implements sunshine.sim.Player {
         }
 
         Point tractorPos = tractor.getLocation();
-        Point newP = lazyMove(tractorPos, p);
+        Point newP = lazyMove(tractorPos, p, 0.99);
 
         commands.add(Command.createMoveCommand(newP));
         commands.add(new Command(CommandType.DETATCH));
@@ -284,7 +287,7 @@ public class Player implements sunshine.sim.Player {
         //backward trip
         Point home = new Point(0.0, 0.0);
         tractorPos = tractor.getLocation();
-        newP = lazyMove(tractorPos, home);
+        newP = lazyMove(tractorPos, home, 0.99);
 
         commands.add(Command.createMoveCommand(newP));
         commands.add(new Command(CommandType.DETATCH));
@@ -306,26 +309,37 @@ public class Player implements sunshine.sim.Player {
         }
 
         Point tractorPos = tractor.getLocation();
-        Point newP = lazyMove(tractorPos, parking);
+        Point newP = lazyMove(tractorPos, parking, -0.99); // ********************************* Lazy Move ***************
+        parking = newP;
 
-        commands.add(Command.createMoveCommand(newP));
+        commands.add(Command.createMoveCommand(parking));
         commands.add(new Command(CommandType.DETATCH));
         for (int i = 0; i < eleven.size() - 1; i++) {
             Point bale = eleven.get(i);
+
+            newP = lazyMove(parking, bale, -0.75);
+
             commands.add(Command.createMoveCommand(bale));
             commands.add(new Command(CommandType.LOAD));
-            commands.add(Command.createMoveCommand(parking));
+
+            newP = lazyMove(bale, parking, -0.99); // ********************************* Lazy Move ***************
+
+            commands.add(Command.createMoveCommand(newP));
             commands.add(new Command(CommandType.STACK));
         }
         commands.add(Command.createMoveCommand(eleven.get(eleven.size() - 1)));
         commands.add(new Command(CommandType.LOAD));
-        commands.add(Command.createMoveCommand(parking));
+
+        tractorPos = tractor.getLocation();
+        newP = lazyMove(new Point(0, 0), parking, -0.99);
+
+        commands.add(Command.createMoveCommand(newP));
         commands.add(new Command(CommandType.ATTACH));
 
         //backward trip
         Point home = new Point(0.0, 0.0);
         tractorPos = tractor.getLocation();
-        newP = lazyMove(tractorPos, home);
+        newP = lazyMove(parking, home, -0.99);
 
         commands.add(Command.createMoveCommand(newP));
         commands.add(new Command(CommandType.DETATCH));
@@ -436,10 +450,9 @@ public class Player implements sunshine.sim.Player {
 
         return maxIndex;
     }
-
     private void unstack(Tractor tractor) {
         int tractorID = tractor.getId();
-        List<Command> commands = commandCenter.get(tractorID);	
+        List<Command> commands = commandCenter.get(tractorID);  
         commands.add(new Command(CommandType.UNSTACK));
         commands.add(new Command(CommandType.UNLOAD));
     }
@@ -454,11 +467,10 @@ public class Player implements sunshine.sim.Player {
         }
 
         if (commands.size() == 0) {
-            //return new Command(CommandType.UNLOAD);
             unstack(tractor);
         }
-        return commands.remove(0);
         
+        return commands.remove(0);
     }
     private void buildList() {
         for (int i = 0; i < 11; i++) {
@@ -491,7 +503,14 @@ public class Player implements sunshine.sim.Player {
         public List<Point> getAll() {
             List<Point> result = new ArrayList<Point>(others);
             result.add(new Point(anchor.x, anchor.y));
-            System.out.println("the size of all points: " + result.size());
+            Collections.sort(result, new Comparator(){
+                @Override
+                public int compare(Object o1, Object o2) {
+                    Point p1 = (Point) o1;
+                    Point p2 = (Point) o2;
+                    return - (int)Math.signum(p1.x*p1.x + p1.y*p1.y - p2.x*p2.x - p2.y*p2.y);
+               }
+            } );
             return result;
         }
 
