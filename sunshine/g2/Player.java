@@ -31,6 +31,8 @@ public class Player implements sunshine.sim.Player {
     private double edgeLength;
     private double time;
     private int numBins;
+    private List<Double> processOrder;
+    private Map<Double, Cluster> time2Cluster;
 
     public Player() {
         rand = new Random(seed);
@@ -41,6 +43,8 @@ public class Player implements sunshine.sim.Player {
         edgeLength = 0.0;
         time = 0.0;
         numBins = 0;
+        processOrder = new ArrayList<Double>();
+        time2Cluster = new HashMap<Double, Cluster>();
     }
     
     public void init(List<Point> bales, int n, double m, double t)
@@ -66,6 +70,7 @@ public class Player implements sunshine.sim.Player {
             List<Command> commands = new ArrayList<Command>();
             commandCenter.put(i, commands);
         }
+        List<Double> processTime = new ArrayList<Double>();
         while (this.bales.size() != 0) {
             Point p = this.bales.remove(0);
             double disToOrigin = calcEucDistance(new Point(0.0, 0.0), p);
@@ -76,6 +81,11 @@ public class Player implements sunshine.sim.Player {
                 c.add(p);
                 Cluster cluster_new = computeCentroid(c);
                 sortedClusters.add(cluster_new);
+                
+                ////////////////////////////////////////to do!!!!!!!!!!!!!!!! fill the queue
+                double time = calculateTime(cluster_new, false);
+                processTime.add(time);
+                time2Cluster.put(time, cluster_new);
             }
             else {
                 this.bales.add(0, p);
@@ -83,32 +93,76 @@ public class Player implements sunshine.sim.Player {
             }
         }
         //KMeans(greaterThan,10000);
-        /*
-        List<Cluster> temp = new ArrayList<Cluster>();
-        for (Cluster cluster: sortedClusters) {
-            Cluster c = new Cluster(cluster.getAnchor(), cluster.getOthers());
-            temp.add(c);
+        // List<Cluster> temp = new ArrayList<Cluster>();
+        // for (Cluster cluster: sortedClusters) {
+        //     cluster = computeCentroid(cluster);
+        //     temp.add(cluster);
+        // }
+        // sortedClusters = temp;
+        Collections.sort(processTime);
+        while (processTime.size() != 0) {
+            List<Integer> batch = getOneTripOrder(processTime);
+            for (int i = batch.get(1) - 1; i >= 0; i--) {
+                double time = processTime.remove(i);
+                processOrder.add(time);
+            }
         }
-        */
         Collections.sort(sortedClusters);
     }
-    /*
-    public Cluster computeCentroid(List<Point> bales) {
-        
-        double xSum = 0, ySum = 0;
-        
-        for (int i=0; i < bales.size(); i++) {
-            Point bale = bales.get(i);
-            xSum += bale.x;
-            ySum += bale.y;
+
+
+    private double calculateTime(Cluster cluster, boolean firstTime) {
+        double time = 660.0;
+        double haulDis = calcEucDistance(new Point(0.0, 0.0), cluster.getAnchor());
+        time += haulDis * 2 / 4;
+        List<Point> bales = cluster.getAll();
+        for (Point bale: bales) {
+            double sprintDis = calcEucDistance(cluster.getAnchor(), bale);
+            time += sprintDis * 2 / 10;
         }
         
-        Point centroid = new Point(xSum/bales.size(), ySum/bales.size());
-        Cluster cluster = new Cluster(centroid,bales);
-        return cluster;
+        if (firstTime) {
+            time -= 60;
+        }
+
+        return time;
     }
-    */
-	public Cluster computeCentroid(List<Point> bales) {
+
+    private List<Integer> getOneTripOrder(List<Double> processTime) {
+        List<Integer> range = new ArrayList<Integer>();
+        if (processTime.size() < numTractors) {
+            range.add(0);
+            range.add(processTime.size());
+            return range;
+        }
+
+        List<Double> offsets = new ArrayList<Double>();
+        for (int i = 1; i < processTime.size(); i++) {
+            offsets.add(processTime.get(i) - processTime.get(i - 1));
+        }
+
+        List<Double> offsetTractors = new ArrayList<Double>();
+        for (int i = 0; i < offsets.size() - numTractors + 1; i++) {
+            double offset = 0.0;
+            for (int j = 0; j < numTractors - 1; j++) {
+                offset += offsets.get(i + j);
+            }
+            offsetTractors.add(offset);
+        }
+
+        double min = Double.MAX_VALUE;
+        int index = 0;
+        for (int i = 0; i < offsetTractors.size(); i++) {
+            if (offsetTractors.get(i) < min) {
+                index = i;
+            }
+        }
+        range.add(index);
+        range.add(numTractors);
+        return range;
+    }
+
+    public Cluster computeCentroid(List<Point> bales) {
         double xSum = 0, ySum = 0;
         
         for (int i=0; i < bales.size(); i++) {
@@ -136,8 +190,6 @@ public class Player implements sunshine.sim.Player {
         Cluster cluster = new Cluster(centerBale,bales);
         return cluster;
     }
-
-
     // when the tractor is back to the original
     public Point lazyMove(Point current, Point dest) 
     {
@@ -155,9 +207,21 @@ public class Player implements sunshine.sim.Player {
         return lazyPoint;
     }
 
+    // private void oneTrip(Tractor tractor) {
+    //     if (sortedClusters.size() != 0) {
+    //         Cluster cluster = sortedClusters.remove(sortedClusters.size() - 1);
+    //         Point parking = calculateParking(cluster.getAnchor());
+    //         collectWithTrailerDistant(tractor, parking, cluster.getAll());
+    //     }
+    //     else {
+    //         Point p = bales.remove(0);
+    //         collectWithoutTrailer(tractor, p);
+    //     }
+    // }
+
     private void oneTrip(Tractor tractor) {
-        if (sortedClusters.size() != 0) {
-            Cluster cluster = sortedClusters.remove(sortedClusters.size() - 1);
+        if (processOrder.size() != 0) {
+            Cluster cluster = time2Cluster.get(processOrder.remove(0));
             Point parking = calculateParking(cluster.getAnchor());
             collectWithTrailerDistant(tractor, parking, cluster.getAll());
         }
@@ -169,8 +233,8 @@ public class Player implements sunshine.sim.Player {
 
     private Point calculateParking(Point p) {
         int dis = (int) Math.sqrt(p.x * p.x + p.y * p.y);
-        int x = (dis-2) * (int) p.x / dis;
-        int y = (dis-2) * (int) p.y / dis;
+        int x = (dis) * (int) p.x / dis;
+        int y = (dis) * (int) p.y / dis;
         return new Point(x, y);
     }
 
