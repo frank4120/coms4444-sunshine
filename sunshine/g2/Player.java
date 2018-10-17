@@ -90,6 +90,11 @@ public class Player implements sunshine.sim.Player {
             }
         }
         //KMeans(greaterThan,10000);
+        List<Cluster> temp = new ArrayList<Cluster>();
+        for (Cluster cluster: sortedClusters) {
+            Cluster c = new Cluster(cluster.getAnchor(), cluster.getOthers());
+            temp.add(c);
+        }
         Collections.sort(sortedClusters);
     }
 
